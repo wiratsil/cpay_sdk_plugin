@@ -34,4 +34,24 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
   Future<bool?> printText(String content) {
     throw UnimplementedError('printText() has not been implemented.');
   }
+
+  Future<String?> scan() {
+    throw UnimplementedError('scan() has not been implemented.');
+  }
+
+  Future<bool?> beep() {
+    throw UnimplementedError('beep() has not been implemented.');
+  }
+
+  Future<String?> checkCard() {
+    throw UnimplementedError('checkCard() has not been implemented.');
+  }
+
+  Future<String?> readCardEmv() {
+    throw UnimplementedError('readCardEmv() has not been implemented.');
+  }
+
+  Stream<String> get onDebugLog {
+    throw UnimplementedError('onDebugLog has not been implemented.');
+  }
 }

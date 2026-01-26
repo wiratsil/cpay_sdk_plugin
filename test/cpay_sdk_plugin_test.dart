@@ -16,6 +16,21 @@ class MockCpaySdkPluginPlatform
 
   @override
   Future<bool?> printText(String content) => Future.value(true);
+
+  @override
+  Future<String?> scan() => Future.value('ScanResult123');
+
+  @override
+  Future<bool?> beep() => Future.value(true);
+
+  @override
+  Future<String?> checkCard() => Future.value('Card1234');
+
+  @override
+  Future<String?> readCardEmv() => Future.value('EmvData123');
+
+  @override
+  Stream<String> get onDebugLog => const Stream.empty();
 }
 
 void main() {

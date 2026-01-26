@@ -12,4 +12,24 @@ class CpaySdkPlugin {
   Future<bool?> printText(String content) {
     return CpaySdkPluginPlatform.instance.printText(content);
   }
+
+  Future<String?> scan() {
+    return CpaySdkPluginPlatform.instance.scan();
+  }
+
+  Future<bool?> beep() {
+    return CpaySdkPluginPlatform.instance.beep();
+  }
+
+  Future<String?> checkCard() {
+    return CpaySdkPluginPlatform.instance.checkCard();
+  }
+
+  Future<String?> readCardEmv() {
+    return CpaySdkPluginPlatform.instance.readCardEmv();
+  }
+
+  Stream<String> get onDebugLog {
+    return CpaySdkPluginPlatform.instance.onDebugLog;
+  }
 }
