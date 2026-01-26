@@ -28,114 +28,114 @@ class _MyAppState extends State<MyApp> {
     initPlatformState();
   }
 
+  void _appendLog(String message) {
+    debugPrint('App Log: $message');
+    if (!mounted) return;
+
+    _logBuffer.add(message);
+    if (_logBuffer.length > 10) {
+      _logBuffer.removeAt(0);
+    }
+
+    setState(() {
+      _statusMessage = _logBuffer.join('\n');
+    });
+  }
+
   Future<void> initPlatformState() async {
     // Listen to debug logs
     _cpaySdkPlugin.onDebugLog.listen((log) {
-      debugPrint('App Log: $log');
-      if (!mounted) return;
-
-      _logBuffer.add(log);
-      if (_logBuffer.length > 5) {
-        _logBuffer.removeAt(0);
-      }
-
-      setState(() {
-        _statusMessage = _logBuffer.join('\n');
-      });
+      _appendLog(log);
     });
   }
 
   Future<void> _getSystemInfo() async {
-    setState(() => _statusMessage = "Getting System Info...");
-    String info;
+    _logBuffer.clear();
+    _appendLog("Getting System Info...");
     try {
-      info = await _cpaySdkPlugin.getSystemInfo() ?? 'Unknown';
-      setState(() {
-        _systemInfo = info;
-        _statusMessage = "Info Retrieved";
-      });
+      String info = await _cpaySdkPlugin.getSystemInfo() ?? 'Unknown';
+      _appendLog("Info: $info");
+      setState(() => _systemInfo = info);
     } catch (e) {
-      setState(() => _statusMessage = 'Error: $e');
+      _appendLog('Error: $e');
     }
   }
 
   Future<void> _printTest() async {
-    setState(() => _statusMessage = 'Printing...');
+    _logBuffer.clear();
+    _appendLog('Printing...');
     try {
       bool? result = await _cpaySdkPlugin.printText(
         "Hello Flutter!\n\nExpanded Feature Test.\n\n\n\n",
       );
-      setState(
-        () =>
-            _statusMessage = result == true ? 'Print Success' : 'Print Failed',
-      );
+      _appendLog(result == true ? 'Print Success' : 'Print Failed');
     } catch (e) {
-      setState(() => _statusMessage = 'Print Error: $e');
+      _appendLog('Print Error: $e');
     }
   }
 
   Future<void> _printLastResult() async {
     if (_lastResult.isEmpty) {
-      setState(() => _statusMessage = 'No details to print!');
+      _appendLog('No details to print!');
       return;
     }
-    setState(() => _statusMessage = 'Printing Details...');
+    _logBuffer.clear();
+    _appendLog('Printing Details...');
     try {
       // Add some header/footer
       String content = "\n--- DETAIL ---\n\n$_lastResult\n\n\n\n\n";
       await _cpaySdkPlugin.printText(content);
-      setState(() => _statusMessage = 'Print Success');
+      _appendLog('Print Success');
     } catch (e) {
-      setState(() => _statusMessage = 'Print Error: $e');
+      _appendLog('Print Error: $e');
     }
   }
 
   Future<void> _scanTest() async {
-    setState(() => _statusMessage = 'Scanning... (Press scan button)');
+    _logBuffer.clear();
+    _appendLog('Scanning... (Press scan button)');
     try {
       String? result = await _cpaySdkPlugin.scan();
-      setState(() {
-        _statusMessage = 'Scan Result: $result';
-        _lastResult = "SCAN:\n$result";
-      });
+      _appendLog('Scan Result: $result');
+      setState(() => _lastResult = "SCAN:\n$result");
     } catch (e) {
-      setState(() => _statusMessage = 'Scan Error: $e');
+      _appendLog('Scan Error: $e');
     }
   }
 
   Future<void> _beepTest() async {
-    setState(() => _statusMessage = 'Beeping...');
+    _logBuffer.clear();
+    _appendLog('Beeping...');
     try {
       await _cpaySdkPlugin.beep();
-      setState(() => _statusMessage = 'Beep Command Sent');
+      _appendLog('Beep Command Sent');
     } catch (e) {
-      setState(() => _statusMessage = 'Beep Error: $e');
+      _appendLog('Beep Error: $e');
     }
   }
 
   Future<void> _cardTest() async {
-    setState(() => _statusMessage = 'Please Swipe/Insert/Tap Card...');
+    _logBuffer.clear();
+    _appendLog('Please Swipe/Insert/Tap Card...');
     try {
       String? result = await _cpaySdkPlugin.checkCard();
-      setState(() {
-        _statusMessage = 'Card Result: $result';
-        _lastResult = result ?? '';
-      });
+      _appendLog('Card Result: $result');
+      setState(() => _lastResult = result ?? '');
     } catch (e) {
-      setState(() => _statusMessage = 'Card Error: $e');
+      _appendLog('Card Error: $e');
     }
   }
 
   Future<void> _readCardEmvTest() async {
-    setState(() => _statusMessage = 'Insert/Tap Card for EMV Read...');
+    _logBuffer.clear();
+    _appendLog('Insert/Tap Card for EMV Read...');
     try {
       String? result = await _cpaySdkPlugin.readCardEmv();
-      setState(() {
-        _statusMessage = 'EMV Result: $result';
-        _lastResult = result ?? '';
-      });
+      _appendLog('Result Matches Logs.');
+      // Update last result for storage
+      setState(() => _lastResult = result ?? '');
     } catch (e) {
-      setState(() => _statusMessage = 'EMV Error: $e');
+      _appendLog('EMV Error: $e');
     }
   }
 

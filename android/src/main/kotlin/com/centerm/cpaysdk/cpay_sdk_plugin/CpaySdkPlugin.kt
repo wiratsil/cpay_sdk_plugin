@@ -146,6 +146,17 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
       }
   }
   
+  private fun beepSuccess() {
+      try {
+          // Fire and forget beep
+          executor.execute {
+              try {
+                  mDeviceManager!!.getBeepDevice().beep(0)
+              } catch (e: Exception) {}
+          }
+      } catch (e: Exception) {}
+  }
+
   private fun scan(result: Result) {
       try {
           val scanner = mDeviceManager!!.getScanDevice()
@@ -155,6 +166,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           
           scanner.scan(params, object : IScanCallback.Stub() {
               override fun onSuccess(bytes: ByteArray?) {
+                  beepSuccess()
                   val scanResult = if (bytes != null) String(bytes) else ""
                   activity?.runOnUiThread { result.success(scanResult) } ?: result.success(scanResult)
               }
@@ -170,7 +182,8 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   
   private fun beep(result: Result) {
       try {
-           val sys = mDeviceManager!!.getSystemDevice()
+           val beeper = mDeviceManager!!.getBeepDevice()
+           beeper.beep(0) // 0=Success/Normal beep
            result.success(true)
       } catch (e: Exception) {
           result.success(false)
@@ -185,10 +198,11 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
 
           emv.checkCard(true, true, true, 30000, object : OnCheckCardResult {
               override fun onFindMagCard(trackData: CommonTrackData?) {
+                  beepSuccess()
                   val sb = StringBuilder()
                   sb.append("Mag Swipe Detected:\n")
                   sb.append("Card No: ").append(trackData?.cardNo?.let { String(it) } ?: "Unknown").append("\n")
-                  // Use 'expire' property instead of expiryDate based on earlier fix
+                  // Use 'expire' property instead of binary date
                   sb.append("Expiry: ").append(trackData?.expire?.let { String(it) } ?: "Unknown")
                   
                   activity?.runOnUiThread { result.success(sb.toString()) } ?: result.success(sb.toString())
@@ -196,11 +210,13 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
               }
 
               override fun onFindICCard() {
+                   beepSuccess()
                    activity?.runOnUiThread { result.success("IC Card Detected.\nUse 'Read Detail' for data.") } ?: result.success("IC Card Detected.\nUse 'Read Detail' for data.")
                    emv.stopCheckCard()
               }
 
               override fun onFindRFCard() {
+                   beepSuccess()
                    activity?.runOnUiThread { result.success("RF Card Detected.\nUse 'Read Detail' for data.") } ?: result.success("RF Card Detected.\nUse 'Read Detail' for data.")
                    emv.stopCheckCard()
               }
@@ -227,6 +243,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           emv.checkCard(true, true, true, 60000, object : OnCheckCardResult {
               
               override fun onFindMagCard(trackData: CommonTrackData?) {
+                  beepSuccess()
                   sendDebug("Mag Swipe Detected")
                   val sb = StringBuilder()
                   sb.append("Mag Read Success:\n")
@@ -243,12 +260,14 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
               }
 
               override fun onFindICCard() {
+                   beepSuccess()
                    sendDebug("IC Card Detected - Starting EMV...")
                    emv.stopCheckCard()
                    startEmvProcess(EmvTransParam.EmvFlow.IC, result)
               }
 
               override fun onFindRFCard() {
+                   beepSuccess()
                    sendDebug("RF Card Detected - Starting EMV...")
                    emv.stopCheckCard()
                    startEmvProcess(EmvTransParam.EmvFlow.RF, result)
@@ -299,22 +318,77 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
                    
                    val sb = StringBuilder()
                    sb.append(if (flow == EmvTransParam.EmvFlow.RF) "Tap (RF) " else "Insert (IC) ").append("Read Success:\n")
-                   sb.append("Card No: ").append(cardNo).append("\n")
                    
+                   // 1. Card Number (Masked/Unmasked handled by Kernel, usually clear here)
+                   sb.append("Card No: ").append(cardNo).append("\n")
+
                    try {
-                       val track2Bytes = emv.readEmvKernelData(arrayOf("57"))
-                       if (track2Bytes != null) {
-                           val track2Str = HexUtils.bcd2str(track2Bytes)
-                           if (track2Str.contains("D")) {
-                               val parts = track2Str.split("D")
+                       // Define Tags to Read
+                       // 57: Track 2
+                       // 5F20: Cardholder Name
+                       // 5F24: App Expiration Date
+                       // 9F06: AID
+                       // 50: App Label
+                       // 9F12: App Preferred Name
+                       // 5F30: Service Code
+                       // 5F28: Issuer Country Code
+                       val tags = arrayOf("57", "5F20", "5F24", "9F06", "50", "9F12", "5F30", "5F28")
+                       
+                       val tagData = emv.readEmvKernelData(tags) 
+                       // Note: readEmvKernelData returns concatenated bytes found. 
+                       // It's safer to read one by one if the SDK blindly concatenates, 
+                       // BUT standard Centerm behavior: if array passed, it returns TLV or concatenated values?
+                       // Actually readEmvKernelData(String[]) usually returns stream of values.
+                       // Let's read individually to be safe and label them.
+                       
+                       // Track 2 (57) for Expiry
+                       val track2 = emv.readEmvKernelData(arrayOf("57"))
+                       if (track2 != null) {
+                           val t2Str = HexUtils.bcd2str(track2)
+                           if (t2Str.contains("D")) {
+                               val parts = t2Str.split("D")
                                if (parts.size > 1 && parts[1].length >= 4) {
                                    val expiry = parts[1].substring(0, 4)
-                                   sb.append("Expiry (YYMM): ").append(expiry)
+                                   sb.append("Expiry (YYMM): ").append(expiry).append("\n")
+                                   sendDebug("Expiry: $expiry")
                                }
                            }
                        }
+                       
+                       // Cardholder Name (5F20)
+                       val nameBytes = emv.readEmvKernelData(arrayOf("5F20"))
+                       if (nameBytes != null) {
+                           val name = String(nameBytes)
+                           sb.append("Name: ").append(name).append("\n")
+                           sendDebug("Name: $name")
+                       }
+                       
+                       // AID (9F06)
+                       val aidBytes = emv.readEmvKernelData(arrayOf("9F06"))
+                       if (aidBytes != null) {
+                           val aid = HexUtils.bcd2str(aidBytes)
+                           sb.append("AID: ").append(aid).append("\n")
+                           sendDebug("AID: $aid")
+                       }
+
+                       // Label (50)
+                       val labelBytes = emv.readEmvKernelData(arrayOf("50"))
+                       if (labelBytes != null) {
+                           val label = String(labelBytes)
+                           sb.append("Label: ").append(label).append("\n")
+                           sendDebug("Label: $label")
+                       }
+                       
+                       // Country Code (5F28)
+                       val countryBytes = emv.readEmvKernelData(arrayOf("5F28"))
+                       if (countryBytes != null) {
+                           val country = HexUtils.bcd2str(countryBytes)
+                           sb.append("Country Code: ").append(country)
+                           sendDebug("Country: $country")
+                       }
+                       
                    } catch (e: Exception) {
-                       sb.append("Expiry: Read Failed")
+                       sb.append("Data Read Error: ${e.message}")
                    }
 
                    activity?.runOnUiThread { 
