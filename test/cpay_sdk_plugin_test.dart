@@ -18,7 +18,8 @@ class MockCpaySdkPluginPlatform
   Future<bool?> printText(String content) => Future.value(true);
 
   @override
-  Future<String?> scan() => Future.value('ScanResult123');
+  Future<String?> scan({bool isFrontCamera = false}) =>
+      Future.value('ScanResult123');
 
   @override
   Future<bool?> beep() => Future.value(true);

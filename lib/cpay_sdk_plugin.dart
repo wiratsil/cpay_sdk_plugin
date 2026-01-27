@@ -13,8 +13,8 @@ class CpaySdkPlugin {
     return CpaySdkPluginPlatform.instance.printText(content);
   }
 
-  Future<String?> scan() {
-    return CpaySdkPluginPlatform.instance.scan();
+  Future<String?> scan({bool isFrontCamera = false}) {
+    return CpaySdkPluginPlatform.instance.scan(isFrontCamera: isFrontCamera);
   }
 
   Future<bool?> beep() {

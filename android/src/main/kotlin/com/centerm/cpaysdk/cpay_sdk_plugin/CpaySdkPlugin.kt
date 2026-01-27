@@ -103,7 +103,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
             }
         }
         "scan" -> {
-            scan(result)
+            scan(call, result)
         }
         "beep" -> {
             beep(result)
@@ -157,11 +157,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
       } catch (e: Exception) {}
   }
 
-  private fun scan(result: Result) {
+  private fun scan(call: MethodCall, result: Result) {
       try {
+          val isFront = call.argument<Boolean>("isFrontCamera") ?: false
           val scanner = mDeviceManager!!.getScanDevice()
           val params = Bundle()
-          params.putInt(IScanner.CAMERA_ID, 1) // Back camera
+          params.putInt(IScanner.CAMERA_ID, if (isFront) 0 else 1) // 0: Front, 1: Back
           params.putInt(IScanner.TIMEOUT, 60000)
           
           scanner.scan(params, object : IScanCallback.Stub() {
