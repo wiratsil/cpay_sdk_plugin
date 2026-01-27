@@ -63,7 +63,12 @@ bool? success = await _plugin.printText("Hello World!\n\n\n");
 ### Scan Barcode/QR
 
 ```dart
+// Scan with Back Camera (Default)
 String? result = await _plugin.scan();
+
+// Scan with Front Camera
+String? resultFront = await _plugin.scan(isFrontCamera: true);
+
 print('Scanned: $result');
 ```
 
