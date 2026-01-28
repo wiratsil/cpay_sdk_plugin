@@ -54,4 +54,22 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
   Stream<String> get onDebugLog {
     throw UnimplementedError('onDebugLog has not been implemented.');
   }
+
+  Future<String?> getLocation() {
+    throw UnimplementedError('getLocation() has not been implemented.');
+  }
+
+  Future<bool?> startLocationService() {
+    throw UnimplementedError(
+      'startLocationService() has not been implemented.',
+    );
+  }
+
+  Future<bool?> stopLocationService() {
+    throw UnimplementedError('stopLocationService() has not been implemented.');
+  }
+
+  Future<bool?> isRfCardPresent() {
+    throw UnimplementedError('isRfCardPresent() has not been implemented.');
+  }
 }

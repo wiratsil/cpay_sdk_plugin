@@ -32,6 +32,18 @@ class MockCpaySdkPluginPlatform
 
   @override
   Stream<String> get onDebugLog => const Stream.empty();
+
+  @override
+  Future<String?> getLocation() => Future.value('13.7563,100.5018'); // Bangkok
+
+  @override
+  Future<bool?> startLocationService() => Future.value(true);
+
+  @override
+  Future<bool?> stopLocationService() => Future.value(true);
+
+  @override
+  Future<bool?> isRfCardPresent() => Future.value(true);
 }
 
 void main() {

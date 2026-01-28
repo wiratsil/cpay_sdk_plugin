@@ -63,4 +63,32 @@ class MethodChannelCpaySdkPlugin extends CpaySdkPluginPlatform {
       'cpay_sdk_plugin/events',
     ).receiveBroadcastStream().cast<String>();
   }
+
+  @override
+  Future<String?> getLocation() async {
+    final result = await methodChannel.invokeMethod<String>('getLocation');
+    return result;
+  }
+
+  @override
+  Future<bool?> startLocationService() async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'startLocationService',
+    );
+    return result;
+  }
+
+  @override
+  Future<bool?> stopLocationService() async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'stopLocationService',
+    );
+    return result;
+  }
+
+  @override
+  Future<bool?> isRfCardPresent() async {
+    final result = await methodChannel.invokeMethod<bool>('isRfCardPresent');
+    return result;
+  }
 }

@@ -139,6 +139,47 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  Future<void> _getLocationTest() async {
+    _logBuffer.clear();
+    _appendLog('Getting Location (GPS/Network)...');
+    try {
+      String? result = await _cpaySdkPlugin.getLocation();
+      _appendLog('Location: $result');
+      setState(() => _lastResult = "GPS:\n$result");
+    } catch (e) {
+      _appendLog('Location Error: $e');
+    }
+  }
+
+  Future<void> _checkRfTest() async {
+    _appendLog('Checking RF Presence...');
+    try {
+      bool? exists = await _cpaySdkPlugin.isRfCardPresent();
+      _appendLog('RF Card Present: $exists');
+      if (exists == true) {
+        setState(() => _lastResult = "RF: PRESENT");
+      } else {
+        setState(() => _lastResult = "RF: NOT FOUND");
+      }
+    } catch (e) {
+      _appendLog('RF Check Error: $e');
+    }
+  }
+
+  Future<void> _monitorLocTest(bool start) async {
+    try {
+      if (start) {
+        await _cpaySdkPlugin.startLocationService();
+        _appendLog('Monitoring Started. GPS Warming up...');
+      } else {
+        await _cpaySdkPlugin.stopLocationService();
+        _appendLog('Monitoring Stopped.');
+      }
+    } catch (e) {
+      _appendLog('Monitor Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -164,13 +205,26 @@ class _MyAppState extends State<MyApp> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        _statusMessage,
-                        textAlign: TextAlign.start,
-                        style: const TextStyle(
-                          color: Colors.blue,
-                          fontSize: 14,
-                          fontFamily: 'Monospace',
+                      Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: SingleChildScrollView(
+                          reverse: true,
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            _statusMessage,
+                            textAlign: TextAlign.start,
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontSize: 12,
+                              fontFamily: 'Monospace',
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -224,6 +278,19 @@ class _MyAppState extends State<MyApp> {
                           onPressed: _cardTest,
                           child: const Text("Check Card (Basic)"),
                         ),
+                        ElevatedButton(
+                          onPressed: _checkRfTest,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                          ),
+                          child: const Text("Check RF Present (Fast)"),
+                        ),
+                        ElevatedButton(
+                          onPressed: _readCardEmvTest,
+                          child: const Text(
+                            "Read Chip/NFC Detail (All-in-One)",
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         ElevatedButton(
                           onPressed: _readCardEmvTest,
@@ -233,6 +300,34 @@ class _MyAppState extends State<MyApp> {
                         ),
                       ]),
                       const SizedBox(height: 20),
+                      _buildActionCard("Location", [
+                        ElevatedButton(
+                          onPressed: _getLocationTest,
+                          child: const Text(
+                            "Get GPS Location (Instant if Monitored)",
+                          ),
+                        ),
+                        // Row for Start/Stop Monitor
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => _monitorLocTest(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              child: const Text("Start Monitor"),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => _monitorLocTest(false),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              child: const Text("Stop Monitor"),
+                            ),
+                          ],
+                        ),
+                      ]),
                     ],
                   ),
                 ),

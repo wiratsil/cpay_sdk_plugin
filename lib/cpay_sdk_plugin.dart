@@ -32,4 +32,20 @@ class CpaySdkPlugin {
   Stream<String> get onDebugLog {
     return CpaySdkPluginPlatform.instance.onDebugLog;
   }
+
+  Future<String?> getLocation() {
+    return CpaySdkPluginPlatform.instance.getLocation();
+  }
+
+  Future<bool?> startLocationService() {
+    return CpaySdkPluginPlatform.instance.startLocationService();
+  }
+
+  Future<bool?> stopLocationService() {
+    return CpaySdkPluginPlatform.instance.stopLocationService();
+  }
+
+  Future<bool?> isRfCardPresent() {
+    return CpaySdkPluginPlatform.instance.isRfCardPresent();
+  }
 }

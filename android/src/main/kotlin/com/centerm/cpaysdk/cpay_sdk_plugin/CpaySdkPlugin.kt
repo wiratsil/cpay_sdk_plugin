@@ -6,6 +6,15 @@ import androidx.annotation.NonNull
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.location.Location
+import android.location.LocationManager
+import android.location.LocationListener
+import android.location.GpsStatus
+import android.location.GnssStatus
+import android.location.OnNmeaMessageListener
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -15,6 +24,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.PluginRegistry
+import androidx.core.app.ActivityCompat
 
 import com.pos.sdk.DevicesFactory
 import com.pos.sdk.DeviceManager
@@ -34,10 +45,11 @@ import com.pos.sdk.emv.EmvTransParam
 import com.pos.sdk.emv.EmvTransType
 import com.pos.sdk.emv.IEmvKernelListener
 import com.pos.util.HexUtils
+import com.pos.sdk.rfcard.RfCardDevice
 import java.util.concurrent.Executors
 
 /** CpaySdkPlugin */
-class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChannel.StreamHandler {
+class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChannel.StreamHandler, PluginRegistry.RequestPermissionsResultListener, LocationListener, GpsStatus.Listener {
   private lateinit var channel : MethodChannel
   private lateinit var eventChannel : EventChannel
   private lateinit var context: Context
@@ -46,6 +58,15 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   private val executor = Executors.newSingleThreadExecutor()
   private var eventSink: EventChannel.EventSink? = null
   private val uiHandler = Handler(Looper.getMainLooper())
+  
+  private var pendingLocationResult: Result? = null
+  private val GPS_PERMISSION_REQUEST_CODE = 999
+  private var cachedLocation: Location? = null
+  private var isMonitoring = false
+  
+  // GnssStatus Callback for API >= 24
+  private var gnssStatusCallback: GnssStatus.Callback? = null
+  private var nmeaListener: OnNmeaMessageListener? = null
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin")
@@ -113,6 +134,18 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
         }
         "readCardEmv" -> {
             readCardEmv(result)
+        }
+        "getLocation" -> {
+            getLocation(result)
+        }
+        "startLocationService" -> {
+            startLocationService(result)
+        }
+        "stopLocationService" -> {
+            stopLocationService(result)
+        }
+        "isRfCardPresent" -> {
+            isRfCardPresent(result)
         }
         else -> {
             result.notImplemented()
@@ -230,6 +263,225 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           result.error("EXCEPTION", e.message, null)
       }
   }
+
+  // --- GPS Location ---
+  private fun getLocation(result: Result) {
+      val context = activity?.applicationContext ?: return result.error("NO_CONTEXT", "Context is null", null)
+
+      if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+          ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+          
+          if (activity != null) {
+              pendingLocationResult = result
+              ActivityCompat.requestPermissions(activity!!, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), GPS_PERMISSION_REQUEST_CODE)
+          } else {
+              result.error("PERMISSION_DENIED", "Location permission not granted and activity is null", null)
+          }
+          return
+      }
+
+      try {
+          // 1. Try Cache First
+          if (cachedLocation != null && (System.currentTimeMillis() - cachedLocation!!.time) < 120000) { // 2 mins valid
+               sendDebug("Location from cache")
+               result.success("${cachedLocation!!.latitude},${cachedLocation!!.longitude}")
+               return
+          }
+
+          val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+          val providers = locationManager.getProviders(true)
+          var bestLocation: Location? = null
+
+          for (provider in providers) {
+              val l = locationManager.getLastKnownLocation(provider) ?: continue
+              if (bestLocation == null || l.accuracy < bestLocation.accuracy) {
+                  bestLocation = l
+              }
+          }
+
+          if (bestLocation != null) {
+              result.success("${bestLocation.latitude},${bestLocation.longitude}")
+          } else {
+              // Request async update
+              sendDebug("No last known location. Requesting update...")
+              pendingLocationResult = result
+              requestLocationUpdates(context, locationManager)
+          }
+      } catch (e: Exception) {
+          result.error("EXCEPTION", e.message, null)
+      }
+  }
+
+  private fun requestLocationUpdates(context: Context, locationManager: LocationManager) {
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            val providers = locationManager.getProviders(true)
+            sendDebug("Enabled Providers: $providers")
+            var requestCount = 0
+            for (provider in providers) {
+                locationManager.requestLocationUpdates(provider, 0L, 0f, this)
+                requestCount++
+            }
+            
+            if (requestCount > 0) {
+                 // Timeout handler - 60 seconds
+                 uiHandler.postDelayed({
+                     if (pendingLocationResult != null) {
+                         sendDebug("Location request timed out after 60s.")
+                         locationManager.removeUpdates(this)
+                         pendingLocationResult?.error("TIMEOUT", "Location request timed out (60s). Providers: $providers. Please check if GPS is really working.", null)
+                         pendingLocationResult = null
+                     }
+                 }, 60000) 
+            } else {
+                pendingLocationResult?.error("NO_PROVIDER", "No location provider enabled", null)
+                pendingLocationResult = null
+            }
+        }
+  }
+ 
+  private fun startLocationService(result: Result) {
+      if (isMonitoring) {
+          result.success(true)
+          return
+      }
+      val context = activity?.applicationContext ?: return result.error("NO_CONTEXT", "Context is null", null)
+      if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+           // Should request permission, but assuming granted for now or handle appropriately
+           result.error("PERMISSION_DENIED", "Permission denied", null)
+           return
+      }
+      val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+      
+      val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+      val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+      sendDebug("Start Monitor: SDK=${Build.VERSION.SDK_INT}, GPS=$isGpsEnabled, Network=$isNetworkEnabled")
+
+      if (!isGpsEnabled && !isNetworkEnabled) {
+          result.error("LOCATION_OFF", "Location services are disabled", null)
+          return
+      }
+
+      try {
+          val providers = locationManager.getProviders(true)
+          sendDebug("Active Providers: $providers")
+          
+          for (provider in providers) {
+              locationManager.requestLocationUpdates(provider, 1000L, 0f, this) // Aggressive: Update every 1s, 0m change
+          }
+          
+          // Register Status Listener
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+              gnssStatusCallback = object : GnssStatus.Callback() {
+                  override fun onSatelliteStatusChanged(status: GnssStatus) {
+                      val count = status.satelliteCount
+                      var fixed = 0
+                      for (i in 0 until count) {
+                          if (status.usedInFix(i)) fixed++
+                      }
+                      uiHandler.post {
+                          sendDebug("GNSS Status: Visible=$count, Used=$fixed")
+                      }
+                  }
+                  override fun onStarted() { sendDebug("GNSS Started") }
+                  override fun onStopped() { sendDebug("GNSS Stopped") }
+              }
+              locationManager.registerGnssStatusCallback(gnssStatusCallback!!, uiHandler)
+              
+              // Register NMEA listener
+              nmeaListener = OnNmeaMessageListener { message, timestamp ->
+                   // Log only GPGGA or first few chars to show life
+                   if (message.startsWith("\$GPGGA") || message.startsWith("\$GNGGA")) {
+                       uiHandler.post { sendDebug("NMEA: $message") }
+                   }
+              }
+              locationManager.addNmeaListener(nmeaListener!!, uiHandler)
+          } else {
+              locationManager.addGpsStatusListener(this)
+          }
+
+          isMonitoring = true
+          sendDebug("Location Monitoring Started (with Satellite Status)")
+          result.success(true)
+      } catch (e: Exception) {
+          result.error("EXCEPTION", e.message, null)
+      }
+  }
+
+  private fun stopLocationService(result: Result) {
+      if (!isMonitoring) {
+          result.success(true)
+          return
+      }
+      val context = activity?.applicationContext
+      if (context != null) {
+          val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+          locationManager.removeUpdates(this)
+          
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && gnssStatusCallback != null) {
+              locationManager.unregisterGnssStatusCallback(gnssStatusCallback!!)
+              gnssStatusCallback = null
+              
+              if (nmeaListener != null) {
+                  locationManager.removeNmeaListener(nmeaListener!!)
+                  nmeaListener = null
+              }
+          } else {
+              locationManager.removeGpsStatusListener(this)
+          }
+      }
+      isMonitoring = false
+      sendDebug("Location Monitoring Stopped")
+      result.success(true)
+  }
+ 
+  override fun onLocationChanged(location: Location) {
+      cachedLocation = location
+      if (pendingLocationResult != null) {
+          pendingLocationResult?.success("${location.latitude},${location.longitude}")
+          pendingLocationResult = null
+          // If we were just waiting for one update and not monitoring, stop? 
+          // But here requestLocationUpdates vs startLocationService might conflict if we are not careful.
+          // Ideally if isMonitoring is false, we remove updates.
+          if (!isMonitoring) {
+             val context = activity?.applicationContext
+             if (context != null) {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                locationManager.removeUpdates(this)
+             }
+          }
+      }
+  }
+
+  override fun onGpsStatusChanged(event: Int) {
+      val context = activity?.applicationContext ?: return
+      val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+      val status = locationManager.getGpsStatus(null)
+      when (event) {
+          GpsStatus.GPS_EVENT_SATELLITE_STATUS -> {
+              var sats = 0
+              var fixed = 0
+              if (status != null) {
+                  for (sat in status.satellites) {
+                      sats++
+                      if (sat.usedInFix()) {
+                          fixed++
+                      }
+                  }
+              }
+              // Only log periodically to avoid spamming, or if count changes significantly?
+              // For debugging now, let's log every time it changes or just debug
+              uiHandler.post {
+                   sendDebug("GPS Status: Visible=$sats, Used=$fixed")
+              }
+          }
+          GpsStatus.GPS_EVENT_STARTED -> sendDebug("GPS Engine Started")
+          GpsStatus.GPS_EVENT_STOPPED -> sendDebug("GPS Engine Stopped")
+      }
+  }
+
+  override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+  override fun onProviderEnabled(provider: String) {}
+  override fun onProviderDisabled(provider: String) {}
 
   // --- Unified Card Reader Implementation ---
 
@@ -442,6 +694,18 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
       }
   }
 
+  private fun isRfCardPresent(result: Result) {
+      try {
+          // Correction: Use getRfDevice() as found in SDK
+          val rf = mDeviceManager!!.getRfDevice()
+          val isPresent = rf.exists()
+          result.success(isPresent)
+      } catch (e: Exception) {
+          // Attempt fallbacks or detailed error
+          result.error("RF_CHECK_ERROR", e.message, null)
+      }
+  }
+
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
     eventChannel.setStreamHandler(null)
@@ -449,6 +713,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
       this.activity = binding.activity
+      binding.addRequestPermissionsResultListener(this)
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -457,9 +722,23 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
 
   override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
       this.activity = binding.activity
+      binding.addRequestPermissionsResultListener(this)
   }
 
   override fun onDetachedFromActivity() {
       this.activity = null
+  }
+
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray): Boolean {
+      if (requestCode == GPS_PERMISSION_REQUEST_CODE) {
+          if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+              pendingLocationResult?.let { getLocation(it) }
+          } else {
+              pendingLocationResult?.error("PERMISSION_DENIED", "Location permission denied by user", null)
+          }
+          pendingLocationResult = null
+          return true
+      }
+      return false
   }
 }
