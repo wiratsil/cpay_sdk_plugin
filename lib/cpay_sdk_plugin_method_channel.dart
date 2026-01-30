@@ -32,9 +32,13 @@ class MethodChannelCpaySdkPlugin extends CpaySdkPluginPlatform {
   }
 
   @override
-  Future<String?> scan({bool isFrontCamera = false}) async {
+  Future<String?> scan({
+    bool isFrontCamera = false,
+    int timeout = 60000,
+  }) async {
     final result = await methodChannel.invokeMethod<String>('scan', {
       'isFrontCamera': isFrontCamera,
+      'timeout': timeout,
     });
     return result;
   }

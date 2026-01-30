@@ -35,7 +35,7 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
     throw UnimplementedError('printText() has not been implemented.');
   }
 
-  Future<String?> scan({bool isFrontCamera = false}) {
+  Future<String?> scan({bool isFrontCamera = false, int timeout = 60000}) {
     throw UnimplementedError('scan() has not been implemented.');
   }
 

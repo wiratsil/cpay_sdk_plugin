@@ -193,10 +193,11 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   private fun scan(call: MethodCall, result: Result) {
       try {
           val isFront = call.argument<Boolean>("isFrontCamera") ?: false
+          val timeout = call.argument<Int>("timeout") ?: 60000
           val scanner = mDeviceManager!!.getScanDevice()
           val params = Bundle()
           params.putInt(IScanner.CAMERA_ID, if (isFront) 0 else 1) // 0: Front, 1: Back
-          params.putInt(IScanner.TIMEOUT, 60000)
+          params.putInt(IScanner.TIMEOUT, timeout)
           
           scanner.scan(params, object : IScanCallback.Stub() {
               override fun onSuccess(bytes: ByteArray?) {

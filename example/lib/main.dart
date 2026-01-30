@@ -91,11 +91,16 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future<void> _scanTest({bool isFront = false}) async {
+  Future<void> _scanTest({bool isFront = false, int timeout = 10000}) async {
     _logBuffer.clear();
-    _appendLog('Scanning (${isFront ? "Front" : "Back"})...');
+    _appendLog(
+      'Scanning (${isFront ? "Front" : "Back"}) Timeout: ${timeout}ms...',
+    );
     try {
-      String? result = await _cpaySdkPlugin.scan(isFrontCamera: isFront);
+      String? result = await _cpaySdkPlugin.scan(
+        isFrontCamera: isFront,
+        timeout: timeout,
+      );
       _appendLog('Scan Result: $result');
       setState(() => _lastResult = "SCAN:\n$result");
     } catch (e) {
@@ -270,6 +275,13 @@ class _MyAppState extends State<MyApp> {
                         ElevatedButton(
                           onPressed: () => _scanTest(isFront: true),
                           child: const Text("Start Scanner (Front)"),
+                        ),
+                        ElevatedButton(
+                          onPressed: () =>
+                              _scanTest(isFront: false, timeout: 10000),
+                          child: const Text(
+                            "Start Scanner (Back, 10s Timeout)",
+                          ),
                         ),
                       ]),
                       _buildActionCard("Card Reader", [
