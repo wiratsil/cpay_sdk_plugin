@@ -101,8 +101,13 @@ class _MyAppState extends State<MyApp> {
         isFrontCamera: isFront,
         timeout: timeout,
       );
-      _appendLog('Scan Result: $result');
-      setState(() => _lastResult = "SCAN:\n$result");
+      if (result == null) {
+        _appendLog('Scan Cancelled/Timeout');
+        setState(() => _lastResult = "SCAN: Cancelled/Timeout");
+      } else {
+        _appendLog('Scan Result: $result');
+        setState(() => _lastResult = "SCAN:\n$result");
+      }
     } catch (e) {
       _appendLog('Scan Error: $e');
     }

@@ -207,7 +207,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
               }
 
               override fun onFailed(i: Int, s: String?) {
-                  activity?.runOnUiThread { result.error("SCAN_ERROR", "Code: $i Msg: $s", null) } ?: result.error("SCAN_ERROR", "Code: $i Msg: $s", null)
+                  // Handle Timeout (Code 200) gracefully
+                  if (i == 200 || i == -1) { // 200 is timeout/cancel usually
+                       activity?.runOnUiThread { result.success(null) } ?: result.success(null)
+                  } else {
+                       activity?.runOnUiThread { result.error("SCAN_ERROR", "Code: $i Msg: $s", null) } ?: result.error("SCAN_ERROR", "Code: $i Msg: $s", null)
+                  }
               }
           })
       } catch (e: Exception) {
