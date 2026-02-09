@@ -17,11 +17,14 @@ import java.util.concurrent.Executors
 /**
  * Manages background QR/Barcode scanning using CameraX + ML Kit.
  * No camera preview UI is shown.
+ * Includes robust camera release and retry logic for ERROR_MAX_CAMERAS_IN_USE.
  */
 class QrScannerManager(private val context: Context) {
 
     companion object {
         private const val TAG = "QrScannerManager"
+        private const val MAX_RETRY_ATTEMPTS = 3
+        private const val RETRY_DELAY_MS = 500L
     }
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -37,6 +40,7 @@ class QrScannerManager(private val context: Context) {
     
     private var isScanning = false
     private var frameCount = 0
+    private var retryCount = 0
 
     fun setResultListener(listener: (String) -> Unit) {
         resultListener = listener
@@ -52,11 +56,17 @@ class QrScannerManager(private val context: Context) {
     }
 
     fun startScanning(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean = false) {
+        retryCount = 0
+        startScanningInternal(lifecycleOwner, useFrontCamera)
+    }
+
+    private fun startScanningInternal(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean) {
         // Force stop first to release any locked camera
-        stopScanning()
+        logDebug("Force stopping previous session...")
+        forceStopAll()
         
-        // Small delay to ensure resources are fully released
-        Thread.sleep(300)
+        // Delay to ensure resources are fully released
+        Thread.sleep(500)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -79,6 +89,13 @@ class QrScannerManager(private val context: Context) {
             try {
                 cameraProvider = cameraProviderFuture.get()
 
+                // Force unbind all before binding new use cases
+                try {
+                    cameraProvider?.unbindAll()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error unbinding: ${e.message}")
+                }
+
                 // Image Analysis use case
                 imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -95,9 +112,6 @@ class QrScannerManager(private val context: Context) {
                     CameraSelector.DEFAULT_BACK_CAMERA
                 }
 
-                // Unbind previous use cases
-                cameraProvider?.unbindAll()
-
                 // Bind to lifecycle (headless - no preview)
                 cameraProvider?.bindToLifecycle(
                     lifecycleOwner,
@@ -107,11 +121,35 @@ class QrScannerManager(private val context: Context) {
 
                 isScanning = true
                 frameCount = 0
+                retryCount = 0
                 logDebug("Camera started (${if (useFrontCamera) "Front" else "Back"})")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start camera", e)
-                logDebug("Camera start FAILED: ${e.message}")
+                val errorMsg = e.message ?: ""
+                
+                // Check if it's MAX_CAMERAS_IN_USE error
+                if (errorMsg.contains("MAX_CAMERAS_IN_USE") || 
+                    errorMsg.contains("CAMERA_IN_USE") ||
+                    errorMsg.contains("Camera is being used")) {
+                    
+                    if (retryCount < MAX_RETRY_ATTEMPTS) {
+                        retryCount++
+                        logDebug("Camera in use, retry attempt $retryCount/$MAX_RETRY_ATTEMPTS...")
+                        
+                        // Wait longer and retry
+                        Thread {
+                            Thread.sleep(RETRY_DELAY_MS * retryCount)
+                            ContextCompat.getMainExecutor(context).execute {
+                                startScanningInternal(lifecycleOwner, useFrontCamera)
+                            }
+                        }.start()
+                    } else {
+                        logDebug("Camera start FAILED after $MAX_RETRY_ATTEMPTS retries: $errorMsg")
+                    }
+                } else {
+                    logDebug("Camera start FAILED: $errorMsg")
+                }
             }
         }, ContextCompat.getMainExecutor(context))
     }
@@ -153,17 +191,52 @@ class QrScannerManager(private val context: Context) {
         }
     }
 
-    fun stopScanning() {
+    /**
+     * Force stop everything - use before starting and on app close
+     */
+    fun forceStopAll() {
         isScanning = false
-        cameraProvider?.unbindAll()
+        
+        // Clear analyzer first
+        try {
+            imageAnalysis?.clearAnalyzer()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error clearing analyzer: ${e.message}")
+        }
+        
+        // Unbind all cameras
+        try {
+            cameraProvider?.unbindAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error unbinding: ${e.message}")
+        }
+        
+        // Shutdown executor
+        try {
+            cameraExecutor?.shutdownNow()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error shutting down executor: ${e.message}")
+        }
+        
+        // Close barcode scanner
+        try {
+            barcodeScanner?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing scanner: ${e.message}")
+        }
+        
+        // Clear all references
         cameraProvider = null
         imageAnalysis = null
-        cameraExecutor?.shutdown()
         cameraExecutor = null
-        barcodeScanner?.close()
         barcodeScanner = null
         lastScannedCode = null
-        Log.d(TAG, "Background QR scanning stopped")
+        
+        Log.d(TAG, "Force stopped all camera resources")
+    }
+
+    fun stopScanning() {
+        forceStopAll()
     }
 
     fun isCurrentlyScanning(): Boolean = isScanning

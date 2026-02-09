@@ -865,9 +865,8 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   }
 
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-    // Force release camera on dispose
-    qrScannerManager?.forceReleaseCamera()
-    qrScannerManager?.stopScanning()
+    // Force release all resources on dispose
+    qrScannerManager?.forceStopAll()
     nfcPollingManager?.stopPolling()
     
     channel.setMethodCallHandler(null)
@@ -880,6 +879,8 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
+      // Force release camera on config change
+      qrScannerManager?.forceStopAll()
       this.activity = null
   }
 
@@ -889,9 +890,8 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   }
 
   override fun onDetachedFromActivity() {
-      // Force release camera when activity is destroyed
-      qrScannerManager?.forceReleaseCamera()
-      qrScannerManager?.stopScanning()
+      // Force release all resources when activity is destroyed
+      qrScannerManager?.forceStopAll()
       nfcPollingManager?.stopPolling()
       this.activity = null
   }
