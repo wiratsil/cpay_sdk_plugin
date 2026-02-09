@@ -66,4 +66,19 @@ class CpaySdkPlugin {
   Stream<String> get onQrCodeDetected {
     return CpaySdkPluginPlatform.instance.onQrCodeDetected;
   }
+
+  // Background NFC Polling
+  Future<bool?> startNfcPolling({int intervalMs = 500}) {
+    return CpaySdkPluginPlatform.instance.startNfcPolling(
+      intervalMs: intervalMs,
+    );
+  }
+
+  Future<bool?> stopNfcPolling() {
+    return CpaySdkPluginPlatform.instance.stopNfcPolling();
+  }
+
+  Stream<bool> get onNfcCardDetected {
+    return CpaySdkPluginPlatform.instance.onNfcCardDetected;
+  }
 }

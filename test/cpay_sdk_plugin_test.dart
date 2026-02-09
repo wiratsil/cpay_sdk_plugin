@@ -55,6 +55,16 @@ class MockCpaySdkPluginPlatform
 
   @override
   Stream<String> get onQrCodeDetected => const Stream.empty();
+
+  // Background NFC Polling
+  @override
+  Future<bool?> startNfcPolling({int intervalMs = 500}) => Future.value(true);
+
+  @override
+  Future<bool?> stopNfcPolling() => Future.value(true);
+
+  @override
+  Stream<bool> get onNfcCardDetected => const Stream.empty();
 }
 
 void main() {

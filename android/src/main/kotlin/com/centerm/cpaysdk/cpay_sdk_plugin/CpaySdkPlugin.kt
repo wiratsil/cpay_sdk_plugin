@@ -73,6 +73,11 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   private var qrScannerManager: QrScannerManager? = null
   private lateinit var qrEventChannel: EventChannel
   private var qrEventSink: EventChannel.EventSink? = null
+  
+  // NFC Polling (Background)
+  private var nfcPollingManager: NfcPollingManager? = null
+  private lateinit var nfcEventChannel: EventChannel
+  private var nfcEventSink: EventChannel.EventSink? = null
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin")
@@ -89,6 +94,17 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
         }
         override fun onCancel(arguments: Any?) {
             qrEventSink = null
+        }
+    })
+    
+    // NFC Event Channel
+    nfcEventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin/nfc_events")
+    nfcEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+            nfcEventSink = events
+        }
+        override fun onCancel(arguments: Any?) {
+            nfcEventSink = null
         }
     })
 
@@ -169,6 +185,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
         }
         "stopQrScan" -> {
             stopQrScan(result)
+        }
+        "startNfcPolling" -> {
+            startNfcPolling(call, result)
+        }
+        "stopNfcPolling" -> {
+            stopNfcPolling(result)
         }
         else -> {
             result.notImplemented()
@@ -800,6 +822,45 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           result.success(true)
       } catch (e: Exception) {
           result.error("QR_STOP_ERROR", e.message, null)
+      }
+  }
+
+  // --- Background NFC Polling ---
+  
+  private fun startNfcPolling(call: MethodCall, result: Result) {
+      try {
+          val intervalMs = call.argument<Int>("intervalMs")?.toLong() ?: 500L
+          
+          if (nfcPollingManager == null) {
+              nfcPollingManager = NfcPollingManager(mDeviceManager)
+          }
+          
+          nfcPollingManager?.setCardDetectedListener { isPresent ->
+              uiHandler.post {
+                  nfcEventSink?.success(isPresent)
+              }
+          }
+          
+          nfcPollingManager?.setDebugListener { debugMsg ->
+              uiHandler.post {
+                  eventSink?.success(debugMsg)
+              }
+          }
+          
+          nfcPollingManager?.startPolling(intervalMs)
+          result.success(true)
+          
+      } catch (e: Exception) {
+          result.error("NFC_START_ERROR", e.message, null)
+      }
+  }
+  
+  private fun stopNfcPolling(result: Result) {
+      try {
+          nfcPollingManager?.stopPolling()
+          result.success(true)
+      } catch (e: Exception) {
+          result.error("NFC_STOP_ERROR", e.message, null)
       }
   }
 

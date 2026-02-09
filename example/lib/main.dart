@@ -26,6 +26,10 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription<String>? _qrSubscription;
   bool _isQrScanning = false;
 
+  // Background NFC Polling
+  StreamSubscription<bool>? _nfcSubscription;
+  bool _isNfcPolling = false;
+
   @override
   void initState() {
     super.initState();
@@ -237,6 +241,51 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // Background NFC Polling
+  Future<void> _startNfcPolling() async {
+    if (_isNfcPolling) {
+      _appendLog('Already polling NFC...');
+      return;
+    }
+    _appendLog('Starting NFC Polling...');
+    try {
+      _nfcSubscription = _cpaySdkPlugin.onNfcCardDetected.listen((isPresent) {
+        if (isPresent) {
+          _appendLog('NFC Card DETECTED!');
+          setState(() => _lastResult = "NFC: Card Present");
+        } else {
+          _appendLog('NFC Card REMOVED');
+          setState(() => _lastResult = "NFC: Card Removed");
+        }
+      });
+
+      bool? started = await _cpaySdkPlugin.startNfcPolling(intervalMs: 500);
+      if (started == true) {
+        setState(() => _isNfcPolling = true);
+        _appendLog('NFC Polling Started');
+      } else {
+        _appendLog('Failed to start NFC polling');
+        _nfcSubscription?.cancel();
+      }
+    } catch (e) {
+      _appendLog('NFC Start Error: $e');
+      _nfcSubscription?.cancel();
+    }
+  }
+
+  Future<void> _stopNfcPolling() async {
+    _appendLog('Stopping NFC Polling...');
+    try {
+      await _cpaySdkPlugin.stopNfcPolling();
+      _nfcSubscription?.cancel();
+      _nfcSubscription = null;
+      setState(() => _isNfcPolling = false);
+      _appendLog('NFC Polling Stopped');
+    } catch (e) {
+      _appendLog('NFC Stop Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -416,6 +465,36 @@ class _MyAppState extends State<MyApp> {
                             ),
                             ElevatedButton(
                               onPressed: _isQrScanning ? _stopQrScan : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              child: const Text("Stop"),
+                            ),
+                          ],
+                        ),
+                      ]),
+                      _buildActionCard("Background NFC Polling", [
+                        Text(
+                          _isNfcPolling ? "Status: POLLING" : "Status: STOPPED",
+                          style: TextStyle(
+                            color: _isNfcPolling ? Colors.green : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _isNfcPolling
+                                  ? null
+                                  : _startNfcPolling,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              child: const Text("Start"),
+                            ),
+                            ElevatedButton(
+                              onPressed: _isNfcPolling ? _stopNfcPolling : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
                               ),

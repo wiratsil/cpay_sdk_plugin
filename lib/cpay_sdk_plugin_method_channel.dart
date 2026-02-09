@@ -117,4 +117,26 @@ class MethodChannelCpaySdkPlugin extends CpaySdkPluginPlatform {
       'cpay_sdk_plugin/qr_events',
     ).receiveBroadcastStream().cast<String>();
   }
+
+  // Background NFC Polling
+  @override
+  Future<bool?> startNfcPolling({int intervalMs = 500}) async {
+    final result = await methodChannel.invokeMethod<bool>('startNfcPolling', {
+      'intervalMs': intervalMs,
+    });
+    return result;
+  }
+
+  @override
+  Future<bool?> stopNfcPolling() async {
+    final result = await methodChannel.invokeMethod<bool>('stopNfcPolling');
+    return result;
+  }
+
+  @override
+  Stream<bool> get onNfcCardDetected {
+    return const EventChannel(
+      'cpay_sdk_plugin/nfc_events',
+    ).receiveBroadcastStream().cast<bool>();
+  }
 }

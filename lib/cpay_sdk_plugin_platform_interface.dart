@@ -85,4 +85,17 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
   Stream<String> get onQrCodeDetected {
     throw UnimplementedError('onQrCodeDetected has not been implemented.');
   }
+
+  // Background NFC Polling
+  Future<bool?> startNfcPolling({int intervalMs = 500}) {
+    throw UnimplementedError('startNfcPolling() has not been implemented.');
+  }
+
+  Future<bool?> stopNfcPolling() {
+    throw UnimplementedError('stopNfcPolling() has not been implemented.');
+  }
+
+  Stream<bool> get onNfcCardDetected {
+    throw UnimplementedError('onNfcCardDetected has not been implemented.');
+  }
 }

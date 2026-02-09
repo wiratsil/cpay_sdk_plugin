@@ -95,6 +95,29 @@ await _plugin.stopQrScan();
 
 > **Note:** Requires `CAMERA` permission in AndroidManifest.xml and `FlutterFragmentActivity` in MainActivity.
 
+### Background NFC Polling
+
+Continuously poll for NFC cards without blocking the UI.
+
+```dart
+// Start polling (check every 500ms)
+await _plugin.startNfcPolling(intervalMs: 500);
+
+// Listen for card presence changes
+_plugin.onNfcCardDetected.listen((isPresent) {
+  if (isPresent) {
+    print('Card detected!');
+    // Read card data
+    _plugin.readCardEmv();
+  } else {
+    print('Card removed');
+  }
+});
+
+// Stop polling
+await _plugin.stopNfcPolling();
+```
+
 ### Beep
 
 ```dart
