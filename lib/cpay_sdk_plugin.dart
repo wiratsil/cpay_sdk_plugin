@@ -51,4 +51,19 @@ class CpaySdkPlugin {
   Future<bool?> isRfCardPresent() {
     return CpaySdkPluginPlatform.instance.isRfCardPresent();
   }
+
+  // Background QR Scanning
+  Future<bool?> startQrScan({bool isFrontCamera = false}) {
+    return CpaySdkPluginPlatform.instance.startQrScan(
+      isFrontCamera: isFrontCamera,
+    );
+  }
+
+  Future<bool?> stopQrScan() {
+    return CpaySdkPluginPlatform.instance.stopQrScan();
+  }
+
+  Stream<String> get onQrCodeDetected {
+    return CpaySdkPluginPlatform.instance.onQrCodeDetected;
+  }
 }

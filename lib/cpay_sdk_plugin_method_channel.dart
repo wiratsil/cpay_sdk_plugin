@@ -95,4 +95,26 @@ class MethodChannelCpaySdkPlugin extends CpaySdkPluginPlatform {
     final result = await methodChannel.invokeMethod<bool>('isRfCardPresent');
     return result;
   }
+
+  // Background QR Scanning
+  @override
+  Future<bool?> startQrScan({bool isFrontCamera = false}) async {
+    final result = await methodChannel.invokeMethod<bool>('startQrScan', {
+      'isFrontCamera': isFrontCamera,
+    });
+    return result;
+  }
+
+  @override
+  Future<bool?> stopQrScan() async {
+    final result = await methodChannel.invokeMethod<bool>('stopQrScan');
+    return result;
+  }
+
+  @override
+  Stream<String> get onQrCodeDetected {
+    return const EventChannel(
+      'cpay_sdk_plugin/qr_events',
+    ).receiveBroadcastStream().cast<String>();
+  }
 }

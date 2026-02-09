@@ -22,6 +22,10 @@ class _MyAppState extends State<MyApp> {
   String _lastResult = '';
   final _cpaySdkPlugin = CpaySdkPlugin();
 
+  // Background QR Scanning
+  StreamSubscription<String>? _qrSubscription;
+  bool _isQrScanning = false;
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +194,49 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // Background QR Scanning
+  Future<void> _startQrScan({bool isFront = true}) async {
+    if (_isQrScanning) {
+      _appendLog('Already scanning...');
+      return;
+    }
+    _appendLog(
+      'Starting Background QR Scan (${isFront ? "Front" : "Back"})...',
+    );
+    try {
+      // Start listening to QR events
+      _qrSubscription = _cpaySdkPlugin.onQrCodeDetected.listen((qrCode) {
+        _appendLog('QR Detected: $qrCode');
+        setState(() => _lastResult = "QR: $qrCode");
+      });
+
+      bool? started = await _cpaySdkPlugin.startQrScan(isFrontCamera: isFront);
+      if (started == true) {
+        setState(() => _isQrScanning = true);
+        _appendLog('QR Scan Started - Point camera at QR code');
+      } else {
+        _appendLog('Failed to start QR scan');
+        _qrSubscription?.cancel();
+      }
+    } catch (e) {
+      _appendLog('QR Start Error: $e');
+      _qrSubscription?.cancel();
+    }
+  }
+
+  Future<void> _stopQrScan() async {
+    _appendLog('Stopping QR Scan...');
+    try {
+      await _cpaySdkPlugin.stopQrScan();
+      _qrSubscription?.cancel();
+      _qrSubscription = null;
+      setState(() => _isQrScanning = false);
+      _appendLog('QR Scan Stopped');
+    } catch (e) {
+      _appendLog('QR Stop Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -341,6 +388,38 @@ class _MyAppState extends State<MyApp> {
                                 backgroundColor: Colors.red,
                               ),
                               child: const Text("Stop Monitor"),
+                            ),
+                          ],
+                        ),
+                      ]),
+                      _buildActionCard("Background QR Scan", [
+                        Text(
+                          _isQrScanning
+                              ? "Status: SCANNING"
+                              : "Status: STOPPED",
+                          style: TextStyle(
+                            color: _isQrScanning ? Colors.green : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _isQrScanning
+                                  ? null
+                                  : () => _startQrScan(isFront: true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              child: const Text("Start (Front)"),
+                            ),
+                            ElevatedButton(
+                              onPressed: _isQrScanning ? _stopQrScan : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              child: const Text("Stop"),
                             ),
                           ],
                         ),

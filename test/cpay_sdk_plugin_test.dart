@@ -45,6 +45,16 @@ class MockCpaySdkPluginPlatform
 
   @override
   Future<bool?> isRfCardPresent() => Future.value(true);
+
+  // Background QR Scanning
+  @override
+  Future<bool?> startQrScan({bool isFrontCamera = false}) => Future.value(true);
+
+  @override
+  Future<bool?> stopQrScan() => Future.value(true);
+
+  @override
+  Stream<String> get onQrCodeDetected => const Stream.empty();
 }
 
 void main() {

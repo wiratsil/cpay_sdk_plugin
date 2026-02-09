@@ -26,6 +26,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.LifecycleOwner
 
 import com.pos.sdk.DevicesFactory
 import com.pos.sdk.DeviceManager
@@ -67,6 +68,11 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   // GnssStatus Callback for API >= 24
   private var gnssStatusCallback: GnssStatus.Callback? = null
   private var nmeaListener: OnNmeaMessageListener? = null
+  
+  // QR Scanner (Background)
+  private var qrScannerManager: QrScannerManager? = null
+  private lateinit var qrEventChannel: EventChannel
+  private var qrEventSink: EventChannel.EventSink? = null
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin")
@@ -74,6 +80,17 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
     
     eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin/events")
     eventChannel.setStreamHandler(this)
+    
+    // QR Event Channel
+    qrEventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "cpay_sdk_plugin/qr_events")
+    qrEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+            qrEventSink = events
+        }
+        override fun onCancel(arguments: Any?) {
+            qrEventSink = null
+        }
+    })
 
     context = flutterPluginBinding.applicationContext
     initSdk()
@@ -146,6 +163,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
         }
         "isRfCardPresent" -> {
             isRfCardPresent(result)
+        }
+        "startQrScan" -> {
+            startQrScan(call, result)
+        }
+        "stopQrScan" -> {
+            stopQrScan(result)
         }
         else -> {
             result.notImplemented()
@@ -712,6 +735,74 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
       }
   }
 
+  // --- Background QR Scanning ---
+  private val CAMERA_PERMISSION_REQUEST_CODE = 998
+  private var pendingQrScanResult: Result? = null
+  private var pendingQrUseFrontCamera: Boolean = false
+  
+  private fun startQrScan(call: MethodCall, result: Result) {
+      try {
+          val useFrontCamera = call.argument<Boolean>("isFrontCamera") ?: false
+          
+          val currentActivity = activity
+          if (currentActivity == null || currentActivity !is LifecycleOwner) {
+              result.error("NO_LIFECYCLE", "Activity is not a LifecycleOwner", null)
+              return
+          }
+          
+          // Check camera permission
+          if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
+                  != PackageManager.PERMISSION_GRANTED) {
+              // Request permission
+              pendingQrScanResult = result
+              pendingQrUseFrontCamera = useFrontCamera
+              ActivityCompat.requestPermissions(
+                  currentActivity,
+                  arrayOf(android.Manifest.permission.CAMERA),
+                  CAMERA_PERMISSION_REQUEST_CODE
+              )
+              return
+          }
+          
+          // Permission granted, proceed
+          startQrScanning(currentActivity as LifecycleOwner, useFrontCamera, result)
+          
+      } catch (e: Exception) {
+          result.error("QR_START_ERROR", e.message, null)
+      }
+  }
+  
+  private fun startQrScanning(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean, result: Result) {
+      if (qrScannerManager == null) {
+          qrScannerManager = QrScannerManager(context)
+      }
+      
+      qrScannerManager?.setResultListener { qrCode ->
+          uiHandler.post {
+              qrEventSink?.success(qrCode)
+          }
+      }
+      
+      // Connect debug listener to send logs to Flutter
+      qrScannerManager?.setDebugListener { debugMsg ->
+          uiHandler.post {
+              eventSink?.success(debugMsg)
+          }
+      }
+      
+      qrScannerManager?.startScanning(lifecycleOwner, useFrontCamera)
+      result.success(true)
+  }
+  
+  private fun stopQrScan(result: Result) {
+      try {
+          qrScannerManager?.stopScanning()
+          result.success(true)
+      } catch (e: Exception) {
+          result.error("QR_STOP_ERROR", e.message, null)
+      }
+  }
+
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
     eventChannel.setStreamHandler(null)
@@ -743,6 +834,24 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
               pendingLocationResult?.error("PERMISSION_DENIED", "Location permission denied by user", null)
           }
           pendingLocationResult = null
+          return true
+      }
+      if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+          val result = pendingQrScanResult
+          if (result != null) {
+              if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                  // Permission granted, start scanning
+                  val currentActivity = activity
+                  if (currentActivity != null && currentActivity is LifecycleOwner) {
+                      startQrScanning(currentActivity as LifecycleOwner, pendingQrUseFrontCamera, result)
+                  } else {
+                      result.error("NO_ACTIVITY", "Activity not available", null)
+                  }
+              } else {
+                  result.error("PERMISSION_DENIED", "Camera permission denied by user", null)
+              }
+              pendingQrScanResult = null
+          }
           return true
       }
       return false

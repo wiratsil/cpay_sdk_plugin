@@ -63,14 +63,37 @@ bool? success = await _plugin.printText("Hello World!\n\n\n");
 ### Scan Barcode/QR
 
 ```dart
-// Scan with Back Camera (Default)
+// Scan with Back Camera (Default 60s timeout)
 String? result = await _plugin.scan();
 
 // Scan with Front Camera
 String? resultFront = await _plugin.scan(isFrontCamera: true);
 
+// Custom timeout (10 seconds)
+String? result = await _plugin.scan(timeout: 10000);
+
 print('Scanned: $result');
+// Returns null if timeout/cancelled
 ```
+
+### Background QR Scan (Headless)
+
+Scan QR codes without camera UI - perfect for custom overlay interfaces.
+
+```dart
+// Start background scanning
+await _plugin.startQrScan(isFrontCamera: false);
+
+// Listen for detections
+_plugin.onQrCodeDetected.listen((qrCode) {
+  print('Detected: $qrCode');
+});
+
+// Stop scanning when done
+await _plugin.stopQrScan();
+```
+
+> **Note:** Requires `CAMERA` permission in AndroidManifest.xml and `FlutterFragmentActivity` in MainActivity.
 
 ### Beep
 

@@ -72,4 +72,17 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
   Future<bool?> isRfCardPresent() {
     throw UnimplementedError('isRfCardPresent() has not been implemented.');
   }
+
+  // Background QR Scanning
+  Future<bool?> startQrScan({bool isFrontCamera = false}) {
+    throw UnimplementedError('startQrScan() has not been implemented.');
+  }
+
+  Future<bool?> stopQrScan() {
+    throw UnimplementedError('stopQrScan() has not been implemented.');
+  }
+
+  Stream<String> get onQrCodeDetected {
+    throw UnimplementedError('onQrCodeDetected has not been implemented.');
+  }
 }
