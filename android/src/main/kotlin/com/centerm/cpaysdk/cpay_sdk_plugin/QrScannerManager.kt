@@ -52,9 +52,10 @@ class QrScannerManager(private val context: Context) {
     }
 
     fun startScanning(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean = false) {
-        if (isScanning) {
-            Log.w(TAG, "Already scanning")
-            return
+        // Force release camera first
+        if (isScanning || cameraProvider != null) {
+            logDebug("Force releasing previous camera...")
+            stopScanning()
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
