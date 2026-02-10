@@ -74,7 +74,10 @@ abstract class CpaySdkPluginPlatform extends PlatformInterface {
   }
 
   // Background QR Scanning
-  Future<bool?> startQrScan({bool isFrontCamera = false}) {
+  Future<bool?> startQrScan({
+    bool isFrontCamera = false,
+    int periodicRestartIntervalMs = 60000,
+  }) {
     throw UnimplementedError('startQrScan() has not been implemented.');
   }
 

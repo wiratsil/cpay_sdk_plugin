@@ -53,9 +53,13 @@ class CpaySdkPlugin {
   }
 
   // Background QR Scanning
-  Future<bool?> startQrScan({bool isFrontCamera = false}) {
+  Future<bool?> startQrScan({
+    bool isFrontCamera = false,
+    int periodicRestartIntervalMs = 60000,
+  }) {
     return CpaySdkPluginPlatform.instance.startQrScan(
       isFrontCamera: isFrontCamera,
+      periodicRestartIntervalMs: periodicRestartIntervalMs,
     );
   }
 

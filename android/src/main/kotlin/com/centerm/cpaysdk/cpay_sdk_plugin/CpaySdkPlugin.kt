@@ -782,10 +782,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   private val CAMERA_PERMISSION_REQUEST_CODE = 998
   private var pendingQrScanResult: Result? = null
   private var pendingQrUseFrontCamera: Boolean = false
+  private var pendingQrPeriodicRestartMs: Long = 60000L
   
   private fun startQrScan(call: MethodCall, result: Result) {
       try {
           val useFrontCamera = call.argument<Boolean>("isFrontCamera") ?: false
+          val periodicRestartMs = call.argument<Int>("periodicRestartIntervalMs")?.toLong() ?: 60000L
           
           val currentActivity = activity
           if (currentActivity == null || currentActivity !is LifecycleOwner) {
@@ -799,6 +801,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
               // Request permission
               pendingQrScanResult = result
               pendingQrUseFrontCamera = useFrontCamera
+              pendingQrPeriodicRestartMs = periodicRestartMs
               ActivityCompat.requestPermissions(
                   currentActivity,
                   arrayOf(android.Manifest.permission.CAMERA),
@@ -808,14 +811,19 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           }
           
           // Permission granted, proceed
-          startQrScanning(currentActivity as LifecycleOwner, useFrontCamera, result)
+          startQrScanning(currentActivity as LifecycleOwner, useFrontCamera, periodicRestartMs, result)
           
       } catch (e: Exception) {
           result.error("QR_START_ERROR", e.message, null)
       }
   }
   
-  private fun startQrScanning(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean, result: Result) {
+  private fun startQrScanning(
+    lifecycleOwner: LifecycleOwner, 
+    useFrontCamera: Boolean,
+    periodicRestartMs: Long,
+    result: Result
+) {
       if (qrScannerManager == null) {
           qrScannerManager = QrScannerManager(context)
       }
@@ -833,7 +841,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
           }
       }
       
-      qrScannerManager?.startScanning(lifecycleOwner, useFrontCamera)
+      qrScannerManager?.startScanning(lifecycleOwner, useFrontCamera, periodicRestartMs)
       result.success(true)
   }
   

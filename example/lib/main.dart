@@ -47,17 +47,35 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // Track if scanning was active before pause (to auto-restart on resume)
+  bool _wasQrScanning = false;
+  bool _wasNfcPolling = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _appendLog('App paused/detached - releasing camera...');
+      // Remember what was active before pausing
+      _wasQrScanning = _isQrScanning;
+      _wasNfcPolling = _isNfcPolling;
+      _appendLog('App paused - releasing camera...');
       _cpaySdkPlugin.stopQrScan();
       _cpaySdkPlugin.stopNfcPolling();
       setState(() {
         _isQrScanning = false;
         _isNfcPolling = false;
       });
+    } else if (state == AppLifecycleState.resumed) {
+      _appendLog('App resumed');
+      // Auto-restart scanning if it was active before pause
+      if (_wasQrScanning) {
+        _appendLog('Restarting QR scan...');
+        _startQrScan();
+      }
+      if (_wasNfcPolling) {
+        _appendLog('Restarting NFC polling...');
+        _startNfcPolling();
+      }
     }
   }
 

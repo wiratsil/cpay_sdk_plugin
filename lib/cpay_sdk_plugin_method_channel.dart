@@ -98,9 +98,13 @@ class MethodChannelCpaySdkPlugin extends CpaySdkPluginPlatform {
 
   // Background QR Scanning
   @override
-  Future<bool?> startQrScan({bool isFrontCamera = false}) async {
+  Future<bool?> startQrScan({
+    bool isFrontCamera = false,
+    int periodicRestartIntervalMs = 60000,
+  }) async {
     final result = await methodChannel.invokeMethod<bool>('startQrScan', {
       'isFrontCamera': isFrontCamera,
+      'periodicRestartIntervalMs': periodicRestartIntervalMs,
     });
     return result;
   }
