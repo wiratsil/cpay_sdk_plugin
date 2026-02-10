@@ -942,7 +942,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
                   // Permission granted, start scanning
                   val currentActivity = activity
                   if (currentActivity != null && currentActivity is LifecycleOwner) {
-                      startQrScanning(currentActivity as LifecycleOwner, pendingQrUseFrontCamera, result)
+                      startQrScanning(currentActivity as LifecycleOwner, pendingQrUseFrontCamera, pendingQrPeriodicRestartMs, result)
                   } else {
                       result.error("NO_ACTIVITY", "Activity not available", null)
                   }
