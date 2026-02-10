@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.Size
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
@@ -17,18 +18,25 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Manages background QR/Barcode scanning using CameraX + ML Kit.
- * Includes watchdog timer to auto-restart camera when it freezes.
+ * Optimized for long-running scanning with minimal memory usage.
+ * 
+ * Memory optimizations:
+ * 1. Low resolution (640x480) - reduces frame buffer size
+ * 2. Frame skipping - only process every Nth frame with ML Kit
+ * 3. Guaranteed ImageProxy.close() - prevents buffer leak
+ * 4. Watchdog - auto-restart only if camera actually freezes
  */
 class QrScannerManager(private val context: Context) {
 
     companion object {
         private const val TAG = "QrScannerManager"
-        private const val WATCHDOG_INTERVAL_MS = 5000L   // Check every 5 seconds
-        private const val FRAME_TIMEOUT_MS = 10000L      // Restart if no frame for 10 seconds
-        private const val AUTO_RESTART_INTERVAL_MS = 60000L // Auto-restart every 60 seconds to clear mem/buffer
+        private const val WATCHDOG_INTERVAL_MS = 5000L    // Check every 5 seconds
+        private const val FRAME_TIMEOUT_MS = 10000L       // Restart if no frame for 10 seconds
+        private const val PROCESS_EVERY_N_FRAMES = 3      // Only scan every 3rd frame (skip 2)
     }
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -43,13 +51,13 @@ class QrScannerManager(private val context: Context) {
     private var lastScanTime: Long = 0
     private val debounceMs = 1500L
     
-    private var isScanning = false
+    @Volatile private var isScanning = false
     private var frameCount = 0
+    private val isProcessing = AtomicBoolean(false) // Prevent concurrent ML Kit processing
 
-    // Watchdog & auto-restart
+    // Watchdog
     private var watchdogScheduler: ScheduledExecutorService? = null
-    private var lastFrameTime: Long = 0
-    private var cameraStartTime: Long = 0
+    @Volatile private var lastFrameTime: Long = 0
     private var savedLifecycleOwner: LifecycleOwner? = null
     private var savedUseFrontCamera: Boolean = false
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -72,22 +80,19 @@ class QrScannerManager(private val context: Context) {
     }
 
     fun startScanning(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean = false) {
-        // Save for auto-restart
         savedLifecycleOwner = lifecycleOwner
         savedUseFrontCamera = useFrontCamera
-        autoRestartCount = 0
-
         startScanningInternal(lifecycleOwner, useFrontCamera)
     }
 
     private fun startScanningInternal(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean) {
-        // Force stop first
         logDebug("Releasing previous camera resources...")
         forceStopAll()
         Thread.sleep(300)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
+        // Create barcode scanner (lightweight, reuse-safe)
         val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(
                 Barcode.FORMAT_QR_CODE,
@@ -113,8 +118,11 @@ class QrScannerManager(private val context: Context) {
                     Log.w(TAG, "Error unbinding: ${e.message}")
                 }
 
+                // LOW RESOLUTION - reduces memory significantly
                 imageAnalysis = ImageAnalysis.Builder()
+                    .setTargetResolution(Size(640, 480))
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setOutputImageRotationEnabled(true)
                     .build()
 
                 imageAnalysis?.setAnalyzer(cameraExecutor!!) { imageProxy ->
@@ -135,11 +143,10 @@ class QrScannerManager(private val context: Context) {
 
                 isScanning = true
                 frameCount = 0
+                isProcessing.set(false)
                 lastFrameTime = System.currentTimeMillis()
-                cameraStartTime = System.currentTimeMillis()
-                logDebug("Camera started (${if (useFrontCamera) "Front" else "Back"})")
+                logDebug("Camera started (${if (useFrontCamera) "Front" else "Back"}) - Low-res 640x480, skip ${PROCESS_EVERY_N_FRAMES - 1}/$PROCESS_EVERY_N_FRAMES frames")
 
-                // Start watchdog
                 startWatchdog()
 
             } catch (e: Exception) {
@@ -161,9 +168,8 @@ class QrScannerManager(private val context: Context) {
     }
 
     /**
-     * Watchdog timer - checks if camera is still producing frames.
-     * 1. Freeze detection: restart if no frame for FRAME_TIMEOUT_MS
-     * 2. Periodic restart: restart every AUTO_RESTART_INTERVAL_MS to clear mem/buffer
+     * Watchdog timer - only restarts if camera is truly frozen.
+     * No periodic restart needed because memory is managed properly.
      */
     private fun startWatchdog() {
         stopWatchdog()
@@ -175,25 +181,11 @@ class QrScannerManager(private val context: Context) {
                 
                 val now = System.currentTimeMillis()
                 val timeSinceLastFrame = now - lastFrameTime
-                val timeSinceStart = now - cameraStartTime
                 
-                // Check 1: Camera frozen (no frames)
+                // Only restart if camera is truly frozen
                 if (timeSinceLastFrame > FRAME_TIMEOUT_MS) {
                     Log.w(TAG, "Watchdog: No frame for ${timeSinceLastFrame}ms - camera frozen!")
                     logDebug("Watchdog: Camera frozen, restarting...")
-                    
-                    mainHandler.post {
-                        val lo = savedLifecycleOwner
-                        if (lo != null) {
-                            startScanningInternal(lo, savedUseFrontCamera)
-                        }
-                    }
-                    return@scheduleAtFixedRate
-                }
-                
-                // Check 2: Periodic restart to clear memory/buffer
-                if (timeSinceStart > AUTO_RESTART_INTERVAL_MS) {
-                    logDebug("Watchdog: Periodic restart (${timeSinceStart / 1000}s elapsed) - clearing mem/buffer...")
                     
                     mainHandler.post {
                         val lo = savedLifecycleOwner
@@ -207,18 +199,17 @@ class QrScannerManager(private val context: Context) {
             }
         }, WATCHDOG_INTERVAL_MS, WATCHDOG_INTERVAL_MS, TimeUnit.MILLISECONDS)
         
-        Log.d(TAG, "Watchdog started (freeze: ${FRAME_TIMEOUT_MS}ms, periodic: ${AUTO_RESTART_INTERVAL_MS / 1000}s)")
+        Log.d(TAG, "Watchdog started (freeze timeout: ${FRAME_TIMEOUT_MS}ms)")
     }
 
     private fun stopWatchdog() {
-        try {
-            watchdogScheduler?.shutdownNow()
-        } catch (e: Exception) { }
+        try { watchdogScheduler?.shutdownNow() } catch (e: Exception) { }
         watchdogScheduler = null
     }
 
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     private fun processImage(imageProxy: ImageProxy) {
+        // ALWAYS close imageProxy - this is critical for preventing buffer leak
         if (!isScanning) {
             imageProxy.close()
             return
@@ -226,10 +217,22 @@ class QrScannerManager(private val context: Context) {
         
         // Update watchdog timestamp
         lastFrameTime = System.currentTimeMillis()
-        
         frameCount++
-        if (frameCount % 30 == 1) {
-            logDebug("Processing frame #$frameCount")
+        
+        // FRAME SKIPPING - only process every Nth frame to reduce CPU/memory
+        if (frameCount % PROCESS_EVERY_N_FRAMES != 0) {
+            imageProxy.close()  // Close skipped frames immediately!
+            return
+        }
+        
+        // Prevent concurrent ML Kit processing (if previous frame is still being processed)
+        if (!isProcessing.compareAndSet(false, true)) {
+            imageProxy.close()  // Close if already processing another frame
+            return
+        }
+        
+        if (frameCount % 90 == 0) {
+            logDebug("Frame #$frameCount (processed: ${frameCount / PROCESS_EVERY_N_FRAMES})")
         }
         
         val mediaImage = imageProxy.image
@@ -253,10 +256,12 @@ class QrScannerManager(private val context: Context) {
                     Log.e(TAG, "Barcode scanning failed", e)
                 }
                 ?.addOnCompleteListener {
-                    imageProxy.close()
+                    imageProxy.close()       // Always close
+                    isProcessing.set(false)  // Allow next frame to be processed
                 }
         } else {
             imageProxy.close()
+            isProcessing.set(false)
         }
     }
 
@@ -265,6 +270,7 @@ class QrScannerManager(private val context: Context) {
      */
     fun forceStopAll() {
         isScanning = false
+        isProcessing.set(false)
         
         stopWatchdog()
         
