@@ -2,6 +2,7 @@ package com.centerm.cpaysdk.cpay_sdk_plugin
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import androidx.annotation.NonNull
 import android.os.Bundle
 import android.os.Handler
