@@ -36,7 +36,7 @@ class QrScannerManager(private val context: Context) {
         private const val TAG = "QrScannerManager"
         private const val WATCHDOG_INTERVAL_MS = 5000L    // Check every 5 seconds
         private const val FRAME_TIMEOUT_MS = 10000L       // Restart if no frame for 10 seconds
-        private const val PROCESS_EVERY_N_FRAMES = 3      // Only scan every 3rd frame (skip 2)
+        private const val PROCESS_EVERY_N_FRAMES = 2      // Only scan every 2nd frame
     }
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -118,9 +118,9 @@ class QrScannerManager(private val context: Context) {
                     Log.w(TAG, "Error unbinding: ${e.message}")
                 }
 
-                // LOW RESOLUTION - reduces memory significantly
+                // HD resolution - good balance of quality and memory
                 imageAnalysis = ImageAnalysis.Builder()
-                    .setTargetResolution(Size(640, 480))
+                    .setTargetResolution(Size(1280, 720))
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageRotationEnabled(true)
                     .build()
