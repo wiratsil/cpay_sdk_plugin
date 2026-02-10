@@ -118,16 +118,11 @@ class QrScannerManager(private val context: Context) {
                     Log.w(TAG, "Error unbinding: ${e.message}")
                 }
 
-                // HD resolution - good balance of quality and memory
+                // Use standard resolution compatible with K9
                 imageAnalysis = ImageAnalysis.Builder()
-                    .setTargetResolution(Size(1280, 720))
+                    .setTargetResolution(Size(1280, 960))
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setOutputImageRotationEnabled(true)
                     .build()
-
-                imageAnalysis?.setAnalyzer(cameraExecutor!!) { imageProxy ->
-                    processImage(imageProxy)
-                }
 
                 val cameraSelector = if (useFrontCamera) {
                     CameraSelector.DEFAULT_FRONT_CAMERA
@@ -135,17 +130,23 @@ class QrScannerManager(private val context: Context) {
                     CameraSelector.DEFAULT_BACK_CAMERA
                 }
 
+                // Bind FIRST, then set analyzer (fixes frame delivery on some devices)
                 cameraProvider?.bindToLifecycle(
                     lifecycleOwner,
                     cameraSelector,
                     imageAnalysis
                 )
 
+                // Set analyzer AFTER bind
+                imageAnalysis?.setAnalyzer(cameraExecutor!!) { imageProxy ->
+                    processImage(imageProxy)
+                }
+
                 isScanning = true
                 frameCount = 0
                 isProcessing.set(false)
                 lastFrameTime = System.currentTimeMillis()
-                logDebug("Camera started (${if (useFrontCamera) "Front" else "Back"}) - Low-res 640x480, skip ${PROCESS_EVERY_N_FRAMES - 1}/$PROCESS_EVERY_N_FRAMES frames")
+                logDebug("Camera started (${if (useFrontCamera) "Front" else "Back"}) - 1280x960, skip ${PROCESS_EVERY_N_FRAMES - 1}/$PROCESS_EVERY_N_FRAMES frames")
 
                 startWatchdog()
 
