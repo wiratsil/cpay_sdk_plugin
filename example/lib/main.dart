@@ -15,7 +15,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String _systemInfo = 'Unknown';
   String _statusMessage = 'Ready';
   final List<String> _logBuffer = [];
@@ -33,7 +33,32 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initPlatformState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cpaySdkPlugin.stopQrScan();
+    _cpaySdkPlugin.stopNfcPolling();
+    _qrSubscription?.cancel();
+    _nfcSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _appendLog('App paused/detached - releasing camera...');
+      _cpaySdkPlugin.stopQrScan();
+      _cpaySdkPlugin.stopNfcPolling();
+      setState(() {
+        _isQrScanning = false;
+        _isNfcPolling = false;
+      });
+    }
   }
 
   void _appendLog(String message) {

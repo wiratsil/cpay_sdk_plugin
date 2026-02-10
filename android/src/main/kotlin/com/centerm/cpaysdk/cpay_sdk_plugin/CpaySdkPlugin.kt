@@ -110,6 +110,26 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
 
     context = flutterPluginBinding.applicationContext
     initSdk()
+    
+    // Crash protection: release camera if app crashes
+    setupCrashHandler()
+  }
+
+  private var defaultExceptionHandler: Thread.UncaughtExceptionHandler? = null
+
+  private fun setupCrashHandler() {
+    defaultExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+      Log.e("CpaySdkPlugin", "App crash detected! Releasing camera...", throwable)
+      try {
+        qrScannerManager?.forceStopAll()
+        nfcPollingManager?.stopPolling()
+      } catch (e: Exception) {
+        Log.e("CpaySdkPlugin", "Error releasing resources on crash", e)
+      }
+      // Pass to default handler
+      defaultExceptionHandler?.uncaughtException(thread, throwable)
+    }
   }
 
   private fun initSdk() {
