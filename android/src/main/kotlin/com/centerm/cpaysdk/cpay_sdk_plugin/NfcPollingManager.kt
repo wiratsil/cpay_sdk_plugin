@@ -1,6 +1,6 @@
 package com.centerm.cpaysdk.cpay_sdk_plugin
 
-import android.util.Log
+// import android.util.Log
 import com.pos.sdk.DeviceManager
 import com.pos.sdk.rfcard.RfCardDevice
 import java.util.concurrent.Executors
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class NfcPollingManager(private val deviceManager: DeviceManager?) {
 
     companion object {
-        private const val TAG = "NfcPollingManager"
+        // private const val TAG = "NfcPollingManager"
     }
 
     private var scheduler: ScheduledExecutorService? = null
@@ -36,7 +36,7 @@ class NfcPollingManager(private val deviceManager: DeviceManager?) {
     }
 
     private fun logDebug(msg: String) {
-        Log.d(TAG, msg)
+        // Log.d(TAG, msg)
         debugListener?.invoke("[NFC] $msg")
     }
 
@@ -68,8 +68,8 @@ class NfcPollingManager(private val deviceManager: DeviceManager?) {
                     }
                     cardDetectedListener?.invoke(isPresent)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Polling error", e)
+            } catch (_: Exception) {
+                // Log.e(TAG, "Polling error", e)
             }
         }, 0, intervalMs, TimeUnit.MILLISECONDS)
 

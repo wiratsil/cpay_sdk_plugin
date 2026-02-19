@@ -3,7 +3,7 @@ package com.centerm.cpaysdk.cpay_sdk_plugin
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+// import android.util.Log
 import android.util.Size
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class QrScannerManager(private val context: Context) {
 
     companion object {
-        private const val TAG = "QrScannerManager"
+        // private const val TAG = "QrScannerManager"
         private const val WATCHDOG_INTERVAL_MS = 10000L       // Check every 10 seconds  
         private const val FRAME_TIMEOUT_MS = 20000L           // Restart if no frame for 20 seconds
         private const val DEFAULT_PERIODIC_RESTART_MS = 60000L // Default: restart every 60s
@@ -71,7 +71,7 @@ class QrScannerManager(private val context: Context) {
     fun setErrorListener(listener: (String) -> Unit) { errorListener = listener }
 
     private fun logDebug(msg: String) {
-        Log.d(TAG, msg)
+        // Log.d(TAG, msg)
         debugListener?.invoke("[QR] $msg")
     }
 
@@ -108,7 +108,7 @@ class QrScannerManager(private val context: Context) {
         barcodeScanner = null
         lastScannedCode = null
         
-        Log.d(TAG, "Camera resources released")
+        // Log.d(TAG, "Camera resources released")
     }
 
     private fun openCamera(lifecycleOwner: LifecycleOwner, useFrontCamera: Boolean) {
@@ -170,7 +170,7 @@ class QrScannerManager(private val context: Context) {
                 startWatchdog()
 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to start camera", e)
+                // Log.e(TAG, "Failed to start camera", e)
                 val errorMsg = e.message ?: ""
                 logDebug("CAMERA ERROR: $errorMsg")
                 if (errorMsg.contains("MAX_CAMERAS_IN_USE") || 
@@ -220,7 +220,7 @@ class QrScannerManager(private val context: Context) {
                 }
                 
                 if (shouldRestart) {
-                    Log.w(TAG, "Watchdog: $reason - restarting...")
+                    // Log.w(TAG, "Watchdog: $reason - restarting...")
                     logDebug("Watchdog: $reason")
                     
                     mainHandler.post {
@@ -233,12 +233,12 @@ class QrScannerManager(private val context: Context) {
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Watchdog error", e)
+            } catch (_: Exception) {
+                // Log.e(TAG, "Watchdog error", e)
             }
         }, WATCHDOG_INTERVAL_MS, WATCHDOG_INTERVAL_MS, TimeUnit.MILLISECONDS)
         
-        Log.d(TAG, "Watchdog started (freeze: ${FRAME_TIMEOUT_MS}ms, periodic: ${periodicRestartMs}ms)")
+        // Log.d(TAG, "Watchdog started (freeze: ${FRAME_TIMEOUT_MS}ms, periodic: ${periodicRestartMs}ms)")
     }
 
     private fun stopWatchdog() {
@@ -303,17 +303,17 @@ class QrScannerManager(private val context: Context) {
                         }
                     }
                 }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Barcode scan failed: ${e.message}")
+                .addOnFailureListener { _ ->
+                    // Log.e(TAG, "Barcode scan failed: ${e.message}")
                 }
                 .addOnCompleteListener {
                     // This is the NORMAL path for closing
                     imageProxy.close()
                     isProcessing.set(false)
                 }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // FALLBACK: if scanner.process() throws, close here
-            Log.e(TAG, "processImage exception - closing proxy", e)
+            // Log.e(TAG, "processImage exception - closing proxy", e)
             imageProxy.close()
             isProcessing.set(false)
         }

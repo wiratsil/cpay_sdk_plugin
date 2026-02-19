@@ -2,7 +2,7 @@ package com.centerm.cpaysdk.cpay_sdk_plugin
 
 import android.app.Activity
 import android.content.Context
-import android.util.Log
+// import android.util.Log
 import androidx.annotation.NonNull
 import android.os.Bundle
 import android.os.Handler
@@ -121,12 +121,12 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
   private fun setupCrashHandler() {
     defaultExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-      Log.e("CpaySdkPlugin", "App crash detected! Releasing camera...", throwable)
+      // Log.e("CpaySdkPlugin", "App crash detected! Releasing camera...", throwable)
       try {
         qrScannerManager?.forceStopAll()
         nfcPollingManager?.stopPolling()
-      } catch (e: Exception) {
-        Log.e("CpaySdkPlugin", "Error releasing resources on crash", e)
+      } catch (_: Exception) {
+        // Log.e("CpaySdkPlugin", "Error releasing resources on crash", e)
       }
       // Pass to default handler
       defaultExceptionHandler?.uncaughtException(thread, throwable)
@@ -140,7 +140,7 @@ class CpaySdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, EventChann
         }
 
         override fun onError(i: Int, s: String) {
-            println("CpaySDK Init Failed: $i, $s")
+            // println("CpaySDK Init Failed: $i, $s")
         }
     })
   }

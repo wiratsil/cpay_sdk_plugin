@@ -48,7 +48,10 @@ class MockCpaySdkPluginPlatform
 
   // Background QR Scanning
   @override
-  Future<bool?> startQrScan({bool isFrontCamera = false}) => Future.value(true);
+  Future<bool?> startQrScan({
+    bool isFrontCamera = false,
+    int periodicRestartIntervalMs = 60000,
+  }) => Future.value(true);
 
   @override
   Future<bool?> stopQrScan() => Future.value(true);
