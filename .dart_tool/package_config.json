@@ -45,9 +45,9 @@
     },
     {
       "name": "flutter_lints",
-      "rootUri": "file:///C:/Users/Wimutti/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_lints-6.0.0",
+      "rootUri": "file:///C:/Users/Wimutti/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_lints-4.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.8"
+      "languageVersion": "3.1"
     },
     {
       "name": "flutter_test",
@@ -75,9 +75,9 @@
     },
     {
       "name": "lints",
-      "rootUri": "file:///C:/Users/Wimutti/AppData/Local/Pub/Cache/hosted/pub.dev/lints-6.0.0",
+      "rootUri": "file:///C:/Users/Wimutti/AppData/Local/Pub/Cache/hosted/pub.dev/lints-4.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.8"
+      "languageVersion": "3.1"
     },
     {
       "name": "matcher",
@@ -167,7 +167,7 @@
       "name": "cpay_sdk_plugin",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.10"
+      "languageVersion": "3.5"
     }
   ],
   "generator": "pub",
